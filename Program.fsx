@@ -30,7 +30,6 @@ let printerActor(mailbox: Actor<_>)=
         let mutable res=string msg
         if(msg = -1) then
             flag <- false
-            mailbox.Con
         else
             printf "%s\n" res
         return! loop()

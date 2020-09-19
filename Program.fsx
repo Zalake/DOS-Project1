@@ -15,13 +15,15 @@ type dataTypes =
     |Terminate of string
     |InputType of uint64 * uint64 * IActorRef
 //to take inputs form command line
+// printfn "total processor %i" Environment.ProcessorCount
 let args : string array = fsi.CommandLineArgs |> Array.tail
 let N = args.[0] |> uint64
 let k = args.[1] |> uint64
 
 let system = System.create "system" (Configuration.defaultConfig())
 // type SampleTypes= TupleType of uint64 * uint64 * uint64
-let actorNum=100
+let actorNum=Environment.ProcessorCount
+let mutable ActiveActors = 0
 //functions-------
 let mutable flag =true
 let printerActor(mailbox: Actor<_>)=
@@ -60,7 +62,7 @@ let calculator(start:uint64, last:uint64, k:uint64)=
         if sqRt = floor sqRt then
             printer<!i
     counter2<-counter2+1
-    if(counter2=actorNum)then
+    if(counter2=int ActiveActors)then
         printer<! (-1)
 
         
@@ -80,27 +82,26 @@ let lucasActor(mailbox: Actor<_>)=
 let handler (n:uint64, k:uint64) =
     //list of actors
     let actorList = List.init actorNum (fun i->spawn system (string i) lucasActor)
-    let messagePerActor:uint64=N/(uint64 actorNum)
-    //let actorList = spawn system (string i) lucasActor
+    let mutable messagePerActor:uint64=N/(uint64 actorNum)
+    if( int messagePerActor <1) then
+        ActiveActors<- int N
+        messagePerActor<-1UL
+    else
+        ActiveActors <- actorNum
     let mutable index= 0
     let mutable counter:uint64=1UL;
-    while counter<n do
+    while counter<=n do
         let start=uint64 counter
         let last=uint64 (min n (counter+messagePerActor-1UL))
         actorList.Item(index)<!TupleType(start,last,k)
         counter<- (counter+messagePerActor)
         index<-(index+1)%actorNum
-    // for i=0 to actorNum-1 do
-    //     actorList.Item(i).Tell(PoisonPill.Instance)
-
-// type Msg = InputType of uint64 * uint64
 
 //Defining boss actor
 let boss(mailbox: Actor<_>)=
     let rec Bossloop() = actor {
          let! InputType(a,b,c) = mailbox.Receive()
          handler(a,b)
-        //  c.Tell(PoisonPill.Instance)
          return! Bossloop()
     }
     Bossloop()

@@ -28,7 +28,7 @@ let printerActor(mailbox: Actor<_>)=
     let rec loop()= actor{
         let! msg = mailbox.Receive()
         let mutable res=string msg
-        if(msg = -1) then
+        if(res = "-1") then
             flag <- false
         else
             printf "%s\n" res
@@ -47,6 +47,7 @@ let KillerActor(mailbox: Actor<_>)=
     loop()
 let printer=spawn system "printer" printerActor
 let kill =spawn  system "killer" KillerActor
+let mutable counter2=0
 let calculator(start:uint64, last:uint64, k:uint64)=
     
     let mutable sqSum:uint64 = 0UL
@@ -58,7 +59,8 @@ let calculator(start:uint64, last:uint64, k:uint64)=
         sqRt <- sqrt (double sqSum)
         if sqRt = floor sqRt then
             printer<!i
-    if(last=N)then
+    counter2<-counter2+1
+    if(counter2=actorNum)then
         printer<! (-1)
 
         
@@ -88,8 +90,8 @@ let handler (n:uint64, k:uint64) =
         actorList.Item(index)<!TupleType(start,last,k)
         counter<- (counter+messagePerActor)
         index<-(index+1)%actorNum
-    for i=0 to actorNum-1 do
-        actorList.Item(i).Tell(PoisonPill.Instance)
+    // for i=0 to actorNum-1 do
+    //     actorList.Item(i).Tell(PoisonPill.Instance)
 
 // type Msg = InputType of uint64 * uint64
 
@@ -98,7 +100,7 @@ let boss(mailbox: Actor<_>)=
     let rec Bossloop() = actor {
          let! InputType(a,b,c) = mailbox.Receive()
          handler(a,b)
-         c.Tell(PoisonPill.Instance)
+        //  c.Tell(PoisonPill.Instance)
          return! Bossloop()
     }
     Bossloop()

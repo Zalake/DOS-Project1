@@ -1,8 +1,9 @@
 #time "on"
 
-//to run the code from command line
+//nuget packages
 #r "nuget: Akka.FSharp" 
 #r "nuget: Akka.TestKit" 
+
 open System
 open Akka.FSharp
 open Akka.Actor
@@ -10,21 +11,24 @@ open Akka.Configuration
 open Akka.TestKit
 open System.Collections.Generic
 
-type dataTypes =
+type DataTypes =
     |TupleType of uint64 * uint64 * uint64
     |Terminate of string
-    |InputType of uint64 * uint64 * IActorRef
-//to take inputs form command line
-// printfn "total processor %i" Environment.ProcessorCount
+    |InputType of uint64 * uint64
+
+//Taking inputs form command line Interface
+//printfn "number of processor in this syetm are total processor %i" Environment.ProcessorCount
 let args : string array = fsi.CommandLineArgs |> Array.tail
 let N = args.[0] |> uint64
 let k = args.[1] |> uint64
 
 let system = System.create "system" (Configuration.defaultConfig())
-// type SampleTypes= TupleType of uint64 * uint64 * uint64
-let actorNum=Environment.ProcessorCount
-let mutable ActiveActors = 0
-//functions-------
+
+let actorNum=10 //defining actor numbers
+let mutable ActiveActors = 0  //counr of active actors
+
+// Printer actor to print the results
+//after computation by the worker actor
 let mutable flag =true
 let printerActor(mailbox: Actor<_>)=
     let rec loop()= actor{
@@ -37,51 +41,39 @@ let printerActor(mailbox: Actor<_>)=
         return! loop()
     }
     loop()
-let KillerActor(mailbox: Actor<_>)=
-    let rec loop()= actor{
-        let! msg = mailbox.Receive()
-        let mutable res=string msg
-        //res<-res.Substring(0,res.Length-2)
-        if(res="kill") then
-            system.Terminate()|>ignore
-        return! loop()
-    }
-    loop()
-let printer=spawn system "printer" printerActor
-let kill =spawn  system "killer" KillerActor
-let mutable counter2=0
-let calculator(start:uint64, last:uint64, k:uint64)=
     
-    let mutable sqSum:uint64 = 0UL
-    let mutable sqRt:double = 0.0
-    for i = int start to int last do
-        sqSum <- 0UL
-        for j = i to (i+(int k)-(int 1UL)) do
-            sqSum <- sqSum +  (uint64 j*uint64 j)
-        sqRt <- sqrt (double sqSum)
-        if sqRt = floor sqRt then
-            printer<!i
-    counter2<-counter2+1
-    if(counter2=int ActiveActors)then
-        printer<! (-1)
+let printer=spawn system "printer" printerActor
+let mutable counter2=0
 
-        
+// Implementation of worker actors takes inputs start, last and K 
+// It invokes the function calculator       
 let lucasActor(mailbox: Actor<_>)=
     let mutable resList=new List<int>()
     let rec loop() = actor {
         let! msg = mailbox.Receive()
-        
         match msg with
-        |TupleType(start,last,k)-> calculator(start,last,k)
-        
+        | TupleType(start,last,k)->
+            let mutable sqSum:uint64 = 0UL
+            let mutable sqRt:double = 0.0
+            for i = int start to int last do
+                sqSum <- 0UL
+                for j = i to (i+(int k)-(int 1UL)) do
+                    sqSum <- sqSum +  (uint64 j*uint64 j)
+                sqRt <- sqrt (double sqSum)
+                if sqRt = floor sqRt then
+                    printer<!i
+            counter2<-counter2+1
+            if(counter2=int ActiveActors)then
+                printer<! (-1)
+        | _ -> //do nothing
         return! loop()
     }
     loop()
 
-//defining handler function   
+// A function which is called by Boss. It takes n and k as inputs
+// and defines the logic to spawn worker actors.*)
 let handler (n:uint64, k:uint64) =
-    //list of actors
-    let actorList = List.init actorNum (fun i->spawn system (string i) lucasActor)
+    let actorList = List.init actorNum (fun i->spawn system (string i) lucasActor) //list of actors
     let mutable messagePerActor:uint64=N/(uint64 actorNum)
     if( int messagePerActor <1) then
         ActiveActors<- int N
@@ -97,19 +89,23 @@ let handler (n:uint64, k:uint64) =
         counter<- (counter+messagePerActor)
         index<-(index+1)%actorNum
 
-//Defining boss actor
+// Boss actor implementation. It calls the function
+// handler to distrubute the task among the actors
 let boss(mailbox: Actor<_>)=
     let rec Bossloop() = actor {
-         let! InputType(a,b,c) = mailbox.Receive()
-         handler(a,b)
+         let! msgs = mailbox.Receive()
+         match msgs with
+         |InputType(a,b) -> handler(a,b)
+         |_ -> //do nothing
          return! Bossloop()
     }
     Bossloop()
 
-
+// Spawning the boss actor
+// passing inputs N and K
 let actorRef = spawn system "Boss" boss
-actorRef <! InputType(N,k,actorRef)
+actorRef <! InputType(N,k)
 
 let mutable x=0
-while flag=true do
-    x<-x+1
+while flag = true do
+    x<-x

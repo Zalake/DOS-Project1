@@ -15,6 +15,7 @@ type DataTypes =
     |TupleType of uint64 * uint64 * uint64
     |Terminate of string
     |InputType of uint64 * uint64
+    |Done of string
 
 //Taking inputs form command line Interface
 //printfn "number of processor in this syetm are total processor %i" Environment.ProcessorCount
@@ -41,10 +42,21 @@ let printerActor(mailbox: Actor<_>)=
         return! loop()
     }
     loop()
-    
+   
 let printer=spawn system "printer" printerActor
 let mutable counter2=0
 
+let counterActor(mailbox: Actor<_>)=
+    let rec loop()=actor{
+        let! msg = mailbox.Receive()
+        if(msg="done") then
+            counter2<-counter2+1
+        if(counter2=ActiveActors) then
+            printer<! (-1)
+        return! loop()
+    }
+    loop()
+let counterRef=spawn system "counterR" counterActor
 // Implementation of worker actors takes inputs start, last and K 
 // It invokes the function calculator       
 let lucasActor(mailbox: Actor<_>)=
@@ -61,14 +73,13 @@ let lucasActor(mailbox: Actor<_>)=
                     sqSum <- sqSum +  (uint64 j*uint64 j)
                 sqRt <- sqrt (double sqSum)
                 if sqRt = floor sqRt then
-                    printer<!i
-            counter2<-counter2+1
-            if(counter2=int ActiveActors)then
-                printer<! (-1)
+                    printer<!i 
+            counterRef<! "done"
         | _ -> //do nothing
         return! loop()
     }
     loop()
+
 
 // A function which is called by Boss. It takes n and k as inputs
 // and defines the logic to spawn worker actors.*)
